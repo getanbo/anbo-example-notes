@@ -65,7 +65,7 @@
         "ATTACHMENTS_BUCKET": "${terraform.attachments_bucket}",
         "EVENTS_QUEUE_NAME": "${terraform.events_queue_name}",
         "API_ID": "${terraform.api_id}",
-        "SECRET_ARN": "${terraform.secret_arn}",
+        "SECRET_ARN": "${terraform.application_config_arn}",
         "PARAMETER_NAME": "${terraform.parameter_name}",
         "LAMBDA_NAME": "${terraform.lambda_name}",
         "LAMBDA_ROLE_NAME": "${terraform.lambda_role_name}"
