@@ -9,7 +9,12 @@ let cleanupNeeded = true;
 try {
   const plugins = await cli(["plugin", "list"]);
   const listed = event(plugins, "plugin.list");
-  assert.ok(listed.data?.plugins?.some((plugin) => plugin.id === "ministack" && plugin.installed === true));
+  for (const pluginId of ["ministack", "cloud"]) {
+    assert.ok(
+      listed.data?.plugins?.some((plugin) => plugin.id === pluginId && plugin.installed === true),
+      `official ${pluginId} plugin must be installed from the packed monorepo candidate`
+    );
+  }
 
   await cli(["configure", "--target", "ministack"]);
   await cli(["doctor"]);

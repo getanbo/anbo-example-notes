@@ -39,20 +39,23 @@ The MiniStack plugin owns all local provider configuration.
 
 - Node.js 22 or newer
 - Docker Engine or Docker Desktop with Buildx
-- the canonical `anbo` package and `@getanbo/plugin-ministack`
+- the canonical `anbo` package and official `@getanbo` plugins
 
 Terraform is not required on the host. Anbo runs its pinned Terraform worker.
+The CLI, plugin SDK, and both official plugins are maintained together in the
+[`getanbo/anbo-cli`](https://github.com/getanbo/anbo-cli) monorepo.
 
 Install released packages exactly in this project:
 
 ```bash
 npm install
-npm install --save-dev --save-exact anbo@0.2.0 @getanbo/plugin-ministack@0.1.0
+npm install --save-dev --save-exact anbo@0.2.0 @getanbo/plugin-ministack@0.1.0 @getanbo/plugin-cloud@0.1.0
 ```
 
 Until those versions are published, the repository acceptance workflow packs
-the exact CLI, SDK, and plugin candidate refs, installs the tarballs in an empty
-prefix, and uses only that prefix's `node_modules/.bin/anbo`.
+the CLI, SDK, MiniStack plugin, and cloud plugin from one exact monorepo ref,
+installs the tarballs in an empty prefix, and uses only that prefix's
+`node_modules/.bin/anbo`.
 
 ## Agent Workflow
 
