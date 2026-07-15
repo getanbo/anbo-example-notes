@@ -35,8 +35,8 @@ const createdResponse = await fetch("http://127.0.0.1:8080/notes", {
   headers: { "content-type": "application/json", "x-correlation-id": testRunId },
   body: JSON.stringify({ id, title: "Anbo CLI smoke", body: "one agent-visible flow" })
 });
-assert.equal(createdResponse.status, 201, await createdResponse.text());
 const created = await createdResponse.json();
+assert.equal(createdResponse.status, 201, JSON.stringify(created));
 assert.equal(created.id, id);
 assert.equal(created.eventbridge_failures, 0);
 assert.ok(created.execution_arn);
@@ -59,8 +59,9 @@ assert.ok(table.Table?.LatestStreamArn);
 passed("dynamodb.stream", { stream_arn: table.Table.LatestStreamArn });
 
 const gatewayResponse = await fetch(`${endpoint}/_aws/execute-api/${apiId}/$default/health`);
-assert.equal(gatewayResponse.status, 200, await gatewayResponse.text());
-assert.equal((await gatewayResponse.json()).service, "notes-lambda");
+const gateway = await gatewayResponse.json();
+assert.equal(gatewayResponse.status, 200, JSON.stringify(gateway));
+assert.equal(gateway.service, "notes-lambda");
 passed("apigateway.lambda");
 
 const message = await waitForMessage(sqs, queueUrl, id);
