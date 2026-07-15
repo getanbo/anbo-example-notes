@@ -1,0 +1,28 @@
+{
+  "data": {
+    "postgres": {
+      "provider": "external",
+      "endpoint": "env://ANBO_DEMO_POSTGRES_URL",
+      "ttl_seconds": 3600,
+      "retain_on_down": true
+    },
+    "dynamodb": {
+      "provider": "external",
+      "endpoint": "env://ANBO_DEMO_DYNAMODB_ENDPOINT",
+      "credentials": {
+        "access_key_id": "env://ANBO_DEMO_DYNAMODB_ACCESS_KEY_ID",
+        "secret_access_key": "env://ANBO_DEMO_DYNAMODB_SECRET_ACCESS_KEY",
+        "session_token": "env://ANBO_DEMO_DYNAMODB_SESSION_TOKEN"
+      },
+      "region": "us-east-1",
+      "ttl_seconds": 3600,
+      "retain_on_down": true
+    }
+  },
+  "service_bindings": {
+    "environment": {
+      "DATABASE_URL": "${clone.postgres.database_url}"
+    },
+    "dynamodb_plane": "clone"
+  }
+}

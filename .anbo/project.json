@@ -1,0 +1,12 @@
+{
+  "apiVersion": "anbo.dev/project/v1",
+  "defaultTarget": "ministack",
+  "plugins": {
+    "ministack": {
+      "package": "@getanbo/plugin-ministack",
+      "config": {
+        "manifest": ".anbo/sandbox.json"
+      }
+    }
+  }
+}

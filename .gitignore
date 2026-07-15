@@ -1,8 +1,12 @@
-.anbo/state/
+node_modules/
 .terraform/
 *.tfstate
 *.tfstate.*
-node_modules/
 dist/
 *.zip
+infra/.terraform/
+infra/dist/
+infra/*.tfstate*
+.anbo/plugins.lock.json
+.anbo/state/
 .DS_Store

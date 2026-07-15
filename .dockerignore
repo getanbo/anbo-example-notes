@@ -1,0 +1,11 @@
+.git
+.github
+.anbo/state
+.anbo/plugins.lock.json
+.terraform
+candidates
+infra/.terraform
+infra/dist
+infra/*.tfstate*
+node_modules
+*.zip
