@@ -6,13 +6,8 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      cli_ref:
-        description: Exact getanbo/cli branch, tag, or commit to pack
-        required: true
-        default: main
-        type: string
-      ministack_plugin_ref:
-        description: Exact getanbo/anbo-plugin-ministack branch, tag, or commit to pack
+      anbo_ref:
+        description: Exact getanbo/anbo-cli branch, tag, or commit to pack
         required: true
         default: main
         type: string
@@ -25,8 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ANBO_CLI_REF: ${{ inputs.cli_ref || vars.ANBO_CLI_REF || 'main' }}
-  ANBO_MINISTACK_PLUGIN_REF: ${{ inputs.ministack_plugin_ref || vars.ANBO_MINISTACK_PLUGIN_REF || 'main' }}
+  ANBO_REF: ${{ inputs.anbo_ref || vars.ANBO_REF || 'main' }}
 
 jobs:
   installed-cli:
@@ -36,19 +30,12 @@ jobs:
       - name: Check out notes application
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Check out canonical CLI candidate
+      - name: Check out canonical Anbo monorepo candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          repository: getanbo/cli
-          ref: ${{ env.ANBO_CLI_REF }}
-          path: candidates/cli
-
-      - name: Check out MiniStack plugin candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: getanbo/anbo-plugin-ministack
-          ref: ${{ env.ANBO_MINISTACK_PLUGIN_REF }}
-          path: candidates/ministack-plugin
+          repository: getanbo/anbo-cli
+          ref: ${{ env.ANBO_REF }}
+          path: candidates/anbo
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -65,7 +52,7 @@ jobs:
           npm ci
           npm run check
 
-      - name: Pack candidate SDK, CLI, and plugin
+      - name: Pack candidate SDK, CLI, and official plugins
         id: candidates
         shell: bash
         run: |
@@ -73,23 +60,18 @@ jobs:
           tarballs="${RUNNER_TEMP}/anbo-tarballs"
           mkdir -p "$tarballs"
 
-          npm ci --prefix candidates/cli
-          npm run build --prefix candidates/cli
-          sdk_name="$(npm pack ./candidates/cli/packages/plugin-sdk --pack-destination "$tarballs" --silent)"
-          cli_name="$(npm pack ./candidates/cli/packages/cli --pack-destination "$tarballs" --silent)"
-
-          npm ci --prefix candidates/ministack-plugin
-          pushd candidates/ministack-plugin >/dev/null
-          npm pkg set "devDependencies.@getanbo/plugin-sdk=file:$tarballs/$sdk_name"
-          npm install --package-lock=false --no-audit --no-fund
-          npm pkg delete "devDependencies.@getanbo/plugin-sdk"
-          popd >/dev/null
-          plugin_name="$(npm pack ./candidates/ministack-plugin --pack-destination "$tarballs" --silent)"
+          npm ci --prefix candidates/anbo
+          npm run build --prefix candidates/anbo
+          sdk_name="$(npm pack ./candidates/anbo/packages/plugin-sdk --pack-destination "$tarballs" --silent)"
+          cli_name="$(npm pack ./candidates/anbo/packages/cli --pack-destination "$tarballs" --silent)"
+          ministack_plugin_name="$(npm pack ./candidates/anbo/plugins/ministack --pack-destination "$tarballs" --silent)"
+          cloud_plugin_name="$(npm pack ./candidates/anbo/plugins/cloud --pack-destination "$tarballs" --silent)"
 
           {
             echo "sdk=$tarballs/$sdk_name"
             echo "cli=$tarballs/$cli_name"
-            echo "plugin=$tarballs/$plugin_name"
+            echo "ministack_plugin=$tarballs/$ministack_plugin_name"
+            echo "cloud_plugin=$tarballs/$cloud_plugin_name"
           } >> "$GITHUB_OUTPUT"
 
       - name: Install candidates into an empty prefix
@@ -98,14 +80,15 @@ jobs:
         env:
           CLI_TARBALL: ${{ steps.candidates.outputs.cli }}
           SDK_TARBALL: ${{ steps.candidates.outputs.sdk }}
-          PLUGIN_TARBALL: ${{ steps.candidates.outputs.plugin }}
+          MINISTACK_PLUGIN_TARBALL: ${{ steps.candidates.outputs.ministack_plugin }}
+          CLOUD_PLUGIN_TARBALL: ${{ steps.candidates.outputs.cloud_plugin }}
         run: |
           set -euo pipefail
           install_root="${RUNNER_TEMP}/anbo-installed"
           mkdir -p "$install_root"
           printf '{"name":"anbo-notes-installed-acceptance","private":true}\n' > "$install_root/package.json"
           npm install --prefix "$install_root" --ignore-scripts --no-audit --no-fund \
-            "$SDK_TARBALL" "$PLUGIN_TARBALL" "$CLI_TARBALL"
+            "$SDK_TARBALL" "$MINISTACK_PLUGIN_TARBALL" "$CLOUD_PLUGIN_TARBALL" "$CLI_TARBALL"
           echo "root=$install_root" >> "$GITHUB_OUTPUT"
 
       - name: Run complete behavior through the installed CLI
