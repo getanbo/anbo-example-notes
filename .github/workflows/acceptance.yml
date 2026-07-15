@@ -9,12 +9,12 @@ on:
       cli_ref:
         description: Exact getanbo/cli branch, tag, or commit to pack
         required: true
-        default: 1c6b252dc65c07ef01411058abbabbf7e7dc7f87
+        default: 230e7cbd0ab964db61c7e70e6db18e674de4a2e1
         type: string
       ministack_plugin_ref:
         description: Exact getanbo/anbo-plugin-ministack branch, tag, or commit to pack
         required: true
-        default: f406906db321428c03edc24919de782e5a25331e
+        default: daea91ac979d32cdcd388137946b71aab558684e
         type: string
 
 permissions:
@@ -25,8 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ANBO_CLI_REF: ${{ inputs.cli_ref || vars.ANBO_CLI_REF || '1c6b252dc65c07ef01411058abbabbf7e7dc7f87' }}
-  ANBO_MINISTACK_PLUGIN_REF: ${{ inputs.ministack_plugin_ref || vars.ANBO_MINISTACK_PLUGIN_REF || 'f406906db321428c03edc24919de782e5a25331e' }}
+  ANBO_CLI_REF: ${{ inputs.cli_ref || vars.ANBO_CLI_REF || '230e7cbd0ab964db61c7e70e6db18e674de4a2e1' }}
+  ANBO_MINISTACK_PLUGIN_REF: ${{ inputs.ministack_plugin_ref || vars.ANBO_MINISTACK_PLUGIN_REF || 'daea91ac979d32cdcd388137946b71aab558684e' }}
 
 jobs:
   installed-cli:
