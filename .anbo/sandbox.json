@@ -1,0 +1,91 @@
+{
+  "$schema": "https://raw.githubusercontent.com/getanbo/anbo-plugin-ministack/v0.1.0/schemas/sandbox.v2.schema.json",
+  "schema_version": 2,
+  "project": {
+    "name": "anbo-example-notes"
+  },
+  "terraform": {
+    "roots": ["infra"],
+    "variable_files": []
+  },
+  "data": {},
+  "builds": {
+    "lambda": {
+      "context": ".",
+      "inputs": ["lambda", "scripts/build-lambda.mjs", "package.json", "package-lock.json"],
+      "command": ["node", "scripts/build-lambda.mjs"],
+      "outputs": ["infra/dist/notes-lambda.zip"]
+    },
+    "api": {
+      "context": ".",
+      "inputs": [".dockerignore", "Dockerfile", "package.json", "package-lock.json", "src", "scripts/smoke.mjs"],
+      "dockerfile": "Dockerfile"
+    }
+  },
+  "services": {
+    "api": {
+      "build": "api",
+      "environment": {
+        "NOTES_TABLE": "${terraform.notes_table}",
+        "ATTACHMENTS_BUCKET": "${terraform.attachments_bucket}",
+        "EVENTS_QUEUE_NAME": "${terraform.events_queue_name}",
+        "NOTIFICATIONS_TOPIC_ARN": "${terraform.notifications_topic_arn}",
+        "EVENT_BUS_NAME": "${terraform.event_bus_name}",
+        "STATE_MACHINE_ARN": "${terraform.state_machine_arn}"
+      },
+      "ports": [
+        {
+          "container": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "healthcheck": {
+        "type": "command",
+        "command": [
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ],
+        "timeout_seconds": 60,
+        "interval_seconds": 1
+      },
+      "dynamodb_plane": "ministack"
+    }
+  },
+  "tests": {
+    "notes-flow": {
+      "command": ["node", "scripts/smoke.mjs"],
+      "service": "api",
+      "depends_on": ["api"],
+      "timeout_seconds": 120,
+      "default": true,
+      "environment": {
+        "ANBO_TEST_PROTOCOL": "jsonl-v1",
+        "NOTES_TABLE": "${terraform.notes_table}",
+        "ATTACHMENTS_BUCKET": "${terraform.attachments_bucket}",
+        "EVENTS_QUEUE_NAME": "${terraform.events_queue_name}",
+        "NOTIFICATIONS_TOPIC_ARN": "${terraform.notifications_topic_arn}",
+        "API_ID": "${terraform.api_id}",
+        "SECRET_ARN": "${terraform.secret_arn}",
+        "PARAMETER_NAME": "${terraform.parameter_name}",
+        "LAMBDA_NAME": "${terraform.lambda_name}",
+        "LAMBDA_ROLE_NAME": "${terraform.lambda_role_name}"
+      }
+    }
+  },
+  "ministack": {
+    "image": "ghcr.io/getanbo/anbo-ministack@sha256:cf29ce9cacd3982531b5f5bd48a7b46c10acaf4f44a10fb25831b3073c26b204",
+    "digest": "sha256:cf29ce9cacd3982531b5f5bd48a7b46c10acaf4f44a10fb25831b3073c26b204",
+    "profile": "full",
+    "persistence": true,
+    "environment": {
+      "LAMBDA_EXECUTOR": "local",
+      "LOG_LEVEL": "INFO"
+    }
+  },
+  "network": {
+    "allow_hosts": [],
+    "clone_egress": false
+  },
+  "adapters": {}
+}

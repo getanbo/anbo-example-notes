@@ -1,0 +1,117 @@
+name: Installed CLI Acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      cli_ref:
+        description: Exact getanbo/cli branch, tag, or commit to pack
+        required: true
+        default: main
+        type: string
+      ministack_plugin_ref:
+        description: Exact getanbo/anbo-plugin-ministack branch, tag, or commit to pack
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notes-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANBO_CLI_REF: ${{ inputs.cli_ref || vars.ANBO_CLI_REF || 'main' }}
+  ANBO_MINISTACK_PLUGIN_REF: ${{ inputs.ministack_plugin_ref || vars.ANBO_MINISTACK_PLUGIN_REF || 'main' }}
+
+jobs:
+  installed-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out notes application
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check out canonical CLI candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: getanbo/cli
+          ref: ${{ env.ANBO_CLI_REF }}
+          path: candidates/cli
+
+      - name: Check out MiniStack plugin candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: getanbo/anbo-plugin-ministack
+          ref: ${{ env.ANBO_MINISTACK_PLUGIN_REF }}
+          path: candidates/ministack-plugin
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Install application dependencies
+        run: |
+          npm install --global npm@11.6.2
+          npm ci
+          npm run check
+
+      - name: Pack candidate SDK, CLI, and plugin
+        id: candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarballs="${RUNNER_TEMP}/anbo-tarballs"
+          mkdir -p "$tarballs"
+
+          npm ci --prefix candidates/cli
+          npm run build --prefix candidates/cli
+          sdk_name="$(npm pack ./candidates/cli/packages/plugin-sdk --pack-destination "$tarballs" --silent)"
+          cli_name="$(npm pack ./candidates/cli/packages/cli --pack-destination "$tarballs" --silent)"
+
+          npm ci --prefix candidates/ministack-plugin
+          pushd candidates/ministack-plugin >/dev/null
+          npm pkg set "devDependencies.@getanbo/plugin-sdk=file:$tarballs/$sdk_name"
+          npm install --package-lock=false --no-audit --no-fund
+          npm pkg delete "devDependencies.@getanbo/plugin-sdk"
+          popd >/dev/null
+          plugin_name="$(npm pack ./candidates/ministack-plugin --pack-destination "$tarballs" --silent)"
+
+          {
+            echo "sdk=$tarballs/$sdk_name"
+            echo "cli=$tarballs/$cli_name"
+            echo "plugin=$tarballs/$plugin_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install candidates into an empty prefix
+        id: install
+        shell: bash
+        env:
+          CLI_TARBALL: ${{ steps.candidates.outputs.cli }}
+          SDK_TARBALL: ${{ steps.candidates.outputs.sdk }}
+          PLUGIN_TARBALL: ${{ steps.candidates.outputs.plugin }}
+        run: |
+          set -euo pipefail
+          install_root="${RUNNER_TEMP}/anbo-installed"
+          mkdir -p "$install_root"
+          printf '{"name":"anbo-notes-installed-acceptance","private":true}\n' > "$install_root/package.json"
+          npm install --prefix "$install_root" --ignore-scripts --no-audit --no-fund \
+            "$SDK_TARBALL" "$PLUGIN_TARBALL" "$CLI_TARBALL"
+          echo "root=$install_root" >> "$GITHUB_OUTPUT"
+
+      - name: Run complete behavior through the installed CLI
+        env:
+          ANBO_BIN: ${{ steps.install.outputs.root }}/node_modules/.bin/anbo
+          XDG_CACHE_HOME: ${{ runner.temp }}/anbo-xdg/cache
+          XDG_DATA_HOME: ${{ runner.temp }}/anbo-xdg/data
+          XDG_STATE_HOME: ${{ runner.temp }}/anbo-xdg/state
+        run: npm run acceptance

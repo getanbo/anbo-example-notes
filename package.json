@@ -1,0 +1,44 @@
+{
+  "name": "@getanbo/example-notes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Multi-service notes application used to certify Anbo CLI deployment targets.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getanbo/anbo-example-notes.git"
+  },
+  "homepage": "https://github.com/getanbo/anbo-example-notes#readme",
+  "bugs": {
+    "url": "https://github.com/getanbo/anbo-example-notes/issues"
+  },
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "acceptance": "node scripts/acceptance.mjs",
+    "build:lambda": "node scripts/build-lambda.mjs",
+    "check": "node --check src/server.mjs && node --check scripts/smoke.mjs && node --check scripts/acceptance.mjs && node --check scripts/build-lambda.mjs",
+    "start": "node src/server.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.901.0",
+    "@aws-sdk/client-dynamodb": "^3.901.0",
+    "@aws-sdk/client-eventbridge": "^3.901.0",
+    "@aws-sdk/client-iam": "^3.901.0",
+    "@aws-sdk/client-lambda": "^3.901.0",
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/client-secrets-manager": "^3.901.0",
+    "@aws-sdk/client-sfn": "^3.901.0",
+    "@aws-sdk/client-sns": "^3.901.0",
+    "@aws-sdk/client-sqs": "^3.901.0",
+    "@aws-sdk/client-ssm": "^3.901.0",
+    "@aws-sdk/lib-dynamodb": "^3.901.0",
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  }
+}
