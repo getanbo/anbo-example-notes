@@ -6,12 +6,14 @@ MiniStack distribution, builds the application and Lambda once, applies
 Terraform, starts the API, and runs a behavioral smoke test:
 
 ```bash
-./node_modules/.bin/anbo deploy --target ministack --output=jsonl
+anbo deploy --target ministack --output=jsonl
 ```
 
 The JSONL stream is the product interface for an agent. It contains ordered
 phases, stable diagnostic codes, service logs, test assertions, a correlation
-ID, remediation, and exactly one terminal `run.finished` event.
+ID, remediation, and exactly one terminal `run.finished` event. Each smoke
+section's promoted `test.assertion` includes its monotonic `duration_ms`;
+`test.finished` includes the total smoke-test duration.
 
 ## What This Project Certifies
 
@@ -45,11 +47,12 @@ Terraform is not required on the host. Anbo runs its pinned Terraform worker.
 The CLI, plugin SDK, and both official plugins are maintained together in the
 [`getanbo/anbo-cli`](https://github.com/getanbo/anbo-cli) monorepo.
 
-Install released packages exactly in this project:
+Install the application dependencies, then install the released CLI and its
+official plugins globally so `anbo` is available on `PATH`:
 
 ```bash
 npm install
-npm install --save-dev --save-exact anbo@0.2.0 @getanbo/plugin-ministack@0.1.0 @getanbo/plugin-cloud@0.1.0
+npm install --global anbo@0.2.0 @getanbo/plugin-ministack@0.1.0 @getanbo/plugin-cloud@0.1.0
 ```
 
 Until those versions are published, the repository acceptance workflow packs
@@ -63,16 +66,16 @@ Run commands from the repository root. Do not invoke Terraform, Docker, the
 application smoke script, or plugin entrypoints directly.
 
 ```bash
-./node_modules/.bin/anbo plugin list --output=jsonl
-./node_modules/.bin/anbo configure --target ministack --output=jsonl
-./node_modules/.bin/anbo doctor --output=jsonl
-./node_modules/.bin/anbo deploy --output=jsonl
-./node_modules/.bin/anbo status --output=jsonl
-./node_modules/.bin/anbo test --output=jsonl
-./node_modules/.bin/anbo logs --service api --follow --output=jsonl
-./node_modules/.bin/anbo debug --output=jsonl
-./node_modules/.bin/anbo down --purge --output=jsonl
-./node_modules/.bin/anbo cache prune --output=jsonl
+anbo plugin list --output=jsonl
+anbo configure --target ministack --output=jsonl
+anbo doctor --output=jsonl
+anbo deploy --output=jsonl
+anbo status --output=jsonl
+anbo test --output=jsonl
+anbo logs --service api --follow --output=jsonl
+anbo debug --output=jsonl
+anbo down --purge --output=jsonl
+anbo cache prune --output=jsonl
 ```
 
 `deploy` runs the default `notes-flow` smoke test. A second deploy must report
@@ -83,7 +86,7 @@ terminal events before exiting with code 130.
 The compatibility alias is also supported:
 
 ```bash
-./node_modules/.bin/anbo sandbox up --output=jsonl
+anbo sandbox up --output=jsonl
 ```
 
 ## Data Clone URLs
@@ -102,7 +105,7 @@ export ANBO_DEMO_DYNAMODB_ENDPOINT='https://dynamodb-clone.example.com'
 export ANBO_DEMO_DYNAMODB_ACCESS_KEY_ID='temporary-access-key'
 export ANBO_DEMO_DYNAMODB_SECRET_ACCESS_KEY='temporary-secret-key'
 export ANBO_DEMO_DYNAMODB_SESSION_TOKEN='temporary-session-token'
-./node_modules/.bin/anbo deploy --output=jsonl
+anbo deploy --output=jsonl
 ```
 
 The manifest stores only `env://` references. Clone URLs and credentials are
@@ -132,9 +135,9 @@ Start with the terminal event's diagnostic code and remediation. Preserve the
 run ID while inspecting state:
 
 ```bash
-./node_modules/.bin/anbo debug --output=jsonl
-./node_modules/.bin/anbo logs --service api --output=jsonl
-./node_modules/.bin/anbo status --output=jsonl
+anbo debug --output=jsonl
+anbo logs --service api --output=jsonl
+anbo status --output=jsonl
 ```
 
 Never paste clone URLs, credentials, `.anbo/state`, Terraform state, or

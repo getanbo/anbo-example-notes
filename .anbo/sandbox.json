@@ -18,7 +18,7 @@
     },
     "api": {
       "context": ".",
-      "inputs": [".dockerignore", "Dockerfile", "package.json", "package-lock.json", "src", "scripts/smoke.mjs"],
+      "inputs": [".dockerignore", "Dockerfile", "package.json", "package-lock.json", "src", "scripts/smoke.mjs", "scripts/test-timing.mjs"],
       "dockerfile": "Dockerfile"
     }
   },
