@@ -25,6 +25,8 @@ try {
   assert.equal(terraformMutationCount(coldResult.terraform_changes) > 0, true, "cold Terraform apply must create resources");
   assert.equal(coldResult.builds.api.cache_hit, false, "cold API image must be built");
   assert.equal(coldResult.builds.lambda.cache_hit, false, "cold Lambda artifact must be built");
+  assert.equal(coldResult.terraform_reconciliation.skipped, false, "cold Terraform must not be skipped");
+  assert.equal(coldResult.terraform_reconciliation.reconciled, true, "cold Terraform must be reconciled");
   assert.equal(coldResult.tests["notes-flow"].passed, true);
 
   const status = await cli(["status"]);
@@ -43,9 +45,25 @@ try {
   assert.equal(terraformMutationCount(warmResult.terraform_changes), 0, "warm Terraform apply must be idempotent");
   assert.equal(warmResult.builds.api.cache_hit, true, "warm deploy must reuse the API image");
   assert.equal(warmResult.builds.lambda.cache_hit, true, "warm deploy must reuse the Lambda artifact");
+  assert.equal(warmResult.terraform_reconciliation.skipped, true, "unchanged Terraform must be skipped");
+  assert.equal(warmResult.terraform_reconciliation.reconciled, false, "unchanged Terraform must not run");
+  assert.equal(warmResult.terraform_reconciliation.reason, "terraform_reconciliation_fingerprint_match");
   assert.deepEqual(warmResult.tests, {}, "--no-test must skip configured smoke suites");
   assert.equal(warmResult.builds.api.fingerprint, coldResult.builds.api.fingerprint);
   assert.equal(warmResult.builds.lambda.fingerprint, coldResult.builds.lambda.fingerprint);
+
+  const reconciled = await cli(["deploy", "--no-test", "--reconcile"]);
+  const reconciledResult = event(reconciled, "command.result").data;
+  assert.equal(terraformMutationCount(reconciledResult.terraform_changes), 0, "explicit reconciliation must remain idempotent");
+  assert.equal(reconciledResult.terraform_reconciliation.skipped, false);
+  assert.equal(reconciledResult.terraform_reconciliation.reconciled, true);
+  assert.equal(reconciledResult.terraform_reconciliation.reason, "terraform_reconcile_requested");
+  assert.ok(reconciled.some((entry) =>
+    entry.type === "progress" &&
+    entry.data?.phase === "terraform.apply" &&
+    entry.data?.fields?.status === "skipped" &&
+    entry.data?.fields?.reason === "terraform_plan_empty"
+  ), "an empty explicit reconciliation must not apply a saved no-op plan");
 
   await cli(["down", "--purge"]);
   await cli(["cache", "prune"]);
