@@ -64,6 +64,7 @@
         "NOTES_TABLE": "${terraform.notes_table}",
         "ATTACHMENTS_BUCKET": "${terraform.attachments_bucket}",
         "EVENTS_QUEUE_NAME": "${terraform.events_queue_name}",
+        "NOTIFICATIONS_TOPIC_ARN": "${terraform.notifications_topic_arn}",
         "API_ID": "${terraform.api_id}",
         "SECRET_ARN": "${terraform.secret_arn}",
         "PARAMETER_NAME": "${terraform.parameter_name}",

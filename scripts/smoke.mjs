@@ -3,9 +3,10 @@ import { DescribeLogGroupsCommand, CloudWatchLogsClient } from "@aws-sdk/client-
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
 import { ListEventSourceMappingsCommand, LambdaClient } from "@aws-sdk/client-lambda";
-import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetBucketTaggingCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { DescribeExecutionCommand, SFNClient } from "@aws-sdk/client-sfn";
+import { ListTagsForResourceCommand, SNSClient } from "@aws-sdk/client-sns";
 import { DeleteMessageCommand, GetQueueUrlCommand, ReceiveMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 
@@ -16,6 +17,7 @@ const apiId = required("API_ID");
 const tableName = required("NOTES_TABLE");
 const bucketName = required("ATTACHMENTS_BUCKET");
 const queueName = required("EVENTS_QUEUE_NAME");
+const topicArn = required("NOTIFICATIONS_TOPIC_ARN");
 const region = process.env.AWS_REGION ?? "us-east-1";
 const credentials = {
   accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "000000000000",
@@ -47,11 +49,26 @@ assert.equal(loadedResponse.status, 200);
 assert.equal((await loadedResponse.json()).title, "Anbo CLI smoke");
 passed("note.read");
 
-await new S3Client({ ...options, forcePathStyle: true }).send(new HeadObjectCommand({
+const s3 = new S3Client({ ...options, forcePathStyle: true });
+await s3.send(new HeadObjectCommand({
   Bucket: bucketName,
   Key: `notes/${id}.json`
 }));
 passed("s3.attachment");
+
+const topicTags = Object.fromEntries(
+  (await new SNSClient(options).send(new ListTagsForResourceCommand({ ResourceArn: topicArn }))).Tags
+    ?.map(({ Key, Value }) => [Key, Value]) ?? []
+);
+assert.deepEqual(topicTags, { ManagedBy: "anbo", Project: "anbo-notes" });
+passed("sns.tags", { tags: topicTags });
+
+const bucketTags = Object.fromEntries(
+  (await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }))).TagSet
+    ?.map(({ Key, Value }) => [Key, Value]) ?? []
+);
+assert.deepEqual(bucketTags, { ManagedBy: "anbo", Project: "anbo-notes" });
+passed("s3.tags", { tags: bucketTags });
 
 const table = await new DynamoDBClient(options).send(new DescribeTableCommand({ TableName: tableName }));
 assert.equal(table.Table?.StreamSpecification?.StreamEnabled, true);
