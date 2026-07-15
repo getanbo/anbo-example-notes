@@ -17,7 +17,7 @@ try {
   const cold = await cli(["deploy"]);
   const coldResult = event(cold, "command.result").data;
   assert.equal(coldResult.status, "succeeded");
-  assert.equal(coldResult.terraform_changes > 0, true, "cold Terraform apply must create resources");
+  assert.equal(terraformMutationCount(coldResult.terraform_changes) > 0, true, "cold Terraform apply must create resources");
   assert.equal(coldResult.builds.api.cache_hit, false, "cold API image must be built");
   assert.equal(coldResult.builds.lambda.cache_hit, false, "cold Lambda artifact must be built");
   assert.equal(coldResult.tests["notes-flow"].passed, true);
@@ -35,7 +35,7 @@ try {
 
   const warm = await cli(["deploy", "--no-test"]);
   const warmResult = event(warm, "command.result").data;
-  assert.equal(warmResult.terraform_changes, 0, "warm Terraform apply must be idempotent");
+  assert.equal(terraformMutationCount(warmResult.terraform_changes), 0, "warm Terraform apply must be idempotent");
   assert.equal(warmResult.builds.api.cache_hit, true, "warm deploy must reuse the API image");
   assert.equal(warmResult.builds.lambda.cache_hit, true, "warm deploy must reuse the Lambda artifact");
   assert.deepEqual(warmResult.tests, {}, "--no-test must skip configured smoke suites");
@@ -138,6 +138,14 @@ function event(events, type) {
   const found = events.find((entry) => entry.type === type);
   assert.ok(found, `missing ${type} event`);
   return found;
+}
+
+function terraformMutationCount(changes) {
+  assert.ok(changes && typeof changes === "object", "Terraform changes must be a structured summary");
+  return ["create", "update", "delete", "replace"].reduce((total, key) => {
+    assert.equal(Number.isInteger(changes[key]), true, `Terraform change count ${key} must be an integer`);
+    return total + changes[key];
+  }, 0);
 }
 
 function required(name) {
