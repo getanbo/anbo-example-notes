@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { DescribeLogGroupsCommand, CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
@@ -9,6 +10,8 @@ import { DescribeExecutionCommand, SFNClient } from "@aws-sdk/client-sfn";
 import { ListTagsForResourceCommand, SNSClient } from "@aws-sdk/client-sns";
 import { DeleteMessageCommand, GetQueueUrlCommand, ReceiveMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
+
+import { durationMs, timedAssertion } from "./test-timing.mjs";
 
 const runId = required("ANBO_RUN_ID");
 const testRunId = required("ANBO_TEST_RUN_ID");
@@ -24,99 +27,123 @@ const credentials = {
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "anbo-local"
 };
 const options = { endpoint, region, credentials };
+const testStartedAt = performance.now();
 emit("test.started", { name: "notes-flow" });
 try {
 const sqs = new SQSClient(options);
-const discoveredQueueUrl = (await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }))).QueueUrl;
-assert.ok(discoveredQueueUrl, `SQS did not return a URL for ${queueName}`);
+const discoveredQueueUrl = await timedAssertion("sqs.queue_discovery", async () => {
+  const value = (await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }))).QueueUrl;
+  assert.ok(value, `SQS did not return a URL for ${queueName}`);
+  return value;
+}, { emit, fields: () => ({ queue_name: queueName }) });
 const queueUrl = new URL(new URL(discoveredQueueUrl).pathname, `${endpoint}/`).toString();
 
 const id = `note-${runId}`.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 100);
-const createdResponse = await fetch("http://127.0.0.1:8080/notes", {
-  method: "POST",
-  headers: { "content-type": "application/json", "x-correlation-id": testRunId },
-  body: JSON.stringify({ id, title: "Anbo CLI smoke", body: "one agent-visible flow" })
-});
-const created = await createdResponse.json();
-assert.equal(createdResponse.status, 201, JSON.stringify(created));
-assert.equal(created.id, id);
-assert.equal(created.eventbridge_failures, 0);
-assert.ok(created.execution_arn);
-passed("note.create", { id });
+const created = await timedAssertion("note.create", async () => {
+  const response = await fetch("http://127.0.0.1:8080/notes", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-correlation-id": testRunId },
+    body: JSON.stringify({ id, title: "Anbo CLI smoke", body: "one agent-visible flow" })
+  });
+  const body = await response.json();
+  assert.equal(response.status, 201, JSON.stringify(body));
+  assert.equal(body.id, id);
+  assert.equal(body.eventbridge_failures, 0);
+  assert.ok(body.execution_arn);
+  return body;
+}, { emit, fields: () => ({ id }) });
 
-const loadedResponse = await fetch(`http://127.0.0.1:8080/notes/${encodeURIComponent(id)}`);
-assert.equal(loadedResponse.status, 200);
-assert.equal((await loadedResponse.json()).title, "Anbo CLI smoke");
-passed("note.read");
+await timedAssertion("note.read", async () => {
+  const response = await fetch(`http://127.0.0.1:8080/notes/${encodeURIComponent(id)}`);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).title, "Anbo CLI smoke");
+}, { emit });
 
 const s3 = new S3Client({ ...options, forcePathStyle: true });
-await s3.send(new HeadObjectCommand({
+await timedAssertion("s3.attachment", () => s3.send(new HeadObjectCommand({
   Bucket: bucketName,
   Key: `notes/${id}.json`
-}));
-passed("s3.attachment");
+})), { emit });
 
-const topicTags = Object.fromEntries(
-  (await new SNSClient(options).send(new ListTagsForResourceCommand({ ResourceArn: topicArn }))).Tags
+await timedAssertion("sns.tags", async () => {
+  const tags = Object.fromEntries(
+    (await new SNSClient(options).send(new ListTagsForResourceCommand({ ResourceArn: topicArn }))).Tags
     ?.map(({ Key, Value }) => [Key, Value]) ?? []
-);
-assert.deepEqual(topicTags, { ManagedBy: "anbo", Project: "anbo-notes" });
-passed("sns.tags", { tags: topicTags });
+  );
+  assert.deepEqual(tags, { ManagedBy: "anbo", Project: "anbo-notes" });
+  return tags;
+}, { emit, fields: (tags) => ({ tags }) });
 
-const bucketTags = Object.fromEntries(
-  (await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }))).TagSet
+await timedAssertion("s3.tags", async () => {
+  const tags = Object.fromEntries(
+    (await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }))).TagSet
     ?.map(({ Key, Value }) => [Key, Value]) ?? []
-);
-assert.deepEqual(bucketTags, { ManagedBy: "anbo", Project: "anbo-notes" });
-passed("s3.tags", { tags: bucketTags });
+  );
+  assert.deepEqual(tags, { ManagedBy: "anbo", Project: "anbo-notes" });
+  return tags;
+}, { emit, fields: (tags) => ({ tags }) });
 
-const table = await new DynamoDBClient(options).send(new DescribeTableCommand({ TableName: tableName }));
-assert.equal(table.Table?.StreamSpecification?.StreamEnabled, true);
-assert.ok(table.Table?.LatestStreamArn);
-passed("dynamodb.stream", { stream_arn: table.Table.LatestStreamArn });
+const table = await timedAssertion("dynamodb.stream", async () => {
+  const value = await new DynamoDBClient(options).send(new DescribeTableCommand({ TableName: tableName }));
+  assert.equal(value.Table?.StreamSpecification?.StreamEnabled, true);
+  assert.ok(value.Table?.LatestStreamArn);
+  return value;
+}, { emit, fields: (value) => ({ stream_arn: value.Table.LatestStreamArn }) });
 
-const gatewayResponse = await fetch(`${endpoint}/_aws/execute-api/${apiId}/$default/health`);
-const gateway = await gatewayResponse.json();
-assert.equal(gatewayResponse.status, 200, JSON.stringify(gateway));
-assert.equal(gateway.service, "notes-lambda");
-passed("apigateway.lambda");
+await timedAssertion("apigateway.lambda", async () => {
+  const response = await fetch(`${endpoint}/_aws/execute-api/${apiId}/$default/health`);
+  const body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.service, "notes-lambda");
+}, { emit });
 
-const message = await waitForMessage(sqs, queueUrl, id);
-assert.ok(message.ReceiptHandle);
-await sqs.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle }));
-passed("events.queue", { message_id: message.MessageId });
+await timedAssertion("events.queue", async () => {
+  const message = await waitForMessage(sqs, queueUrl, id);
+  assert.ok(message.ReceiptHandle);
+  await sqs.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle }));
+  return message;
+}, { emit, fields: (message) => ({ message_id: message.MessageId }) });
 
-const secret = await new SecretsManagerClient(options).send(new GetSecretValueCommand({ SecretId: required("SECRET_ARN") }));
-assert.match(secret.SecretString ?? "", /notes-demo/);
-passed("secrets.read");
+await timedAssertion("secrets.read", async () => {
+  const secret = await new SecretsManagerClient(options).send(new GetSecretValueCommand({ SecretId: required("SECRET_ARN") }));
+  assert.match(secret.SecretString ?? "", /notes-demo/);
+}, { emit });
 
-const parameter = await new SSMClient(options).send(new GetParameterCommand({ Name: required("PARAMETER_NAME") }));
-assert.equal(parameter.Parameter?.Value, "enabled");
-passed("ssm.read");
+await timedAssertion("ssm.read", async () => {
+  const parameter = await new SSMClient(options).send(new GetParameterCommand({ Name: required("PARAMETER_NAME") }));
+  assert.equal(parameter.Parameter?.Value, "enabled");
+}, { emit });
 
-const execution = await new SFNClient(options).send(new DescribeExecutionCommand({ executionArn: created.execution_arn }));
-assert.ok(["RUNNING", "SUCCEEDED"].includes(execution.status ?? ""));
-passed("stepfunctions.execution", { status: execution.status });
+await timedAssertion("stepfunctions.execution", async () => {
+  const execution = await new SFNClient(options).send(new DescribeExecutionCommand({ executionArn: created.execution_arn }));
+  assert.ok(["RUNNING", "SUCCEEDED"].includes(execution.status ?? ""));
+  return execution;
+}, { emit, fields: (execution) => ({ status: execution.status }) });
 
-const mappings = await new LambdaClient(options).send(new ListEventSourceMappingsCommand({
-  FunctionName: required("LAMBDA_NAME")
-}));
-assert.ok((mappings.EventSourceMappings ?? []).some((mapping) => mapping.EventSourceArn === table.Table?.LatestStreamArn));
-passed("lambda.dynamodb_stream_mapping");
+await timedAssertion("lambda.dynamodb_stream_mapping", async () => {
+  const mappings = await new LambdaClient(options).send(new ListEventSourceMappingsCommand({
+    FunctionName: required("LAMBDA_NAME")
+  }));
+  assert.ok((mappings.EventSourceMappings ?? []).some((mapping) => mapping.EventSourceArn === table.Table?.LatestStreamArn));
+}, { emit });
 
-const role = await new IAMClient(options).send(new GetRoleCommand({ RoleName: required("LAMBDA_ROLE_NAME") }));
-assert.equal(role.Role?.RoleName, required("LAMBDA_ROLE_NAME"));
-passed("iam.role");
+await timedAssertion("iam.role", async () => {
+  const roleName = required("LAMBDA_ROLE_NAME");
+  const role = await new IAMClient(options).send(new GetRoleCommand({ RoleName: roleName }));
+  assert.equal(role.Role?.RoleName, roleName);
+}, { emit });
 
-const logs = await new CloudWatchLogsClient(options).send(new DescribeLogGroupsCommand({ logGroupNamePrefix: "/anbo/notes" }));
-assert.ok((logs.logGroups ?? []).some((group) => group.logGroupName === "/anbo/notes"));
-passed("cloudwatch.logs");
-emit("test.finished", { name: "notes-flow", status: "passed" });
+await timedAssertion("cloudwatch.logs", async () => {
+  const logs = await new CloudWatchLogsClient(options).send(new DescribeLogGroupsCommand({ logGroupNamePrefix: "/anbo/notes" }));
+  assert.ok((logs.logGroups ?? []).some((group) => group.logGroupName === "/anbo/notes"));
+}, { emit });
+emit("test.finished", { name: "notes-flow", status: "passed", duration_ms: durationMs(testStartedAt) });
 } catch (error) {
   emit("test.finished", {
     name: "notes-flow",
     status: "failed",
-    message: error instanceof Error ? error.message : String(error)
+    message: error instanceof Error ? error.message : String(error),
+    duration_ms: durationMs(testStartedAt)
   });
   throw error;
 }
@@ -135,10 +162,6 @@ function required(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required; run this test through anbo`);
   return value;
-}
-
-function passed(name, fields = {}) {
-  emit("test.assertion", { name, status: "passed", passed: true, ...fields });
 }
 
 function emit(kind, fields) {

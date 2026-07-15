@@ -20,7 +20,8 @@
   "scripts": {
     "acceptance": "node scripts/acceptance.mjs",
     "build:lambda": "node scripts/build-lambda.mjs",
-    "check": "node --check src/server.mjs && node --check scripts/smoke.mjs && node --check scripts/acceptance.mjs && node --check scripts/build-lambda.mjs",
+    "check": "node --check src/server.mjs && node --check scripts/smoke.mjs && node --check scripts/test-timing.mjs && node --check scripts/acceptance.mjs && node --check scripts/build-lambda.mjs && npm test",
+    "test": "node --test test/*.test.mjs",
     "start": "node src/server.mjs"
   },
   "dependencies": {

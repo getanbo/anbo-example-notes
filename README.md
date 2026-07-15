@@ -11,7 +11,9 @@ Terraform, starts the API, and runs a behavioral smoke test:
 
 The JSONL stream is the product interface for an agent. It contains ordered
 phases, stable diagnostic codes, service logs, test assertions, a correlation
-ID, remediation, and exactly one terminal `run.finished` event.
+ID, remediation, and exactly one terminal `run.finished` event. Each smoke
+section's promoted `test.assertion` includes its monotonic `duration_ms`;
+`test.finished` includes the total smoke-test duration.
 
 ## What This Project Certifies
 
