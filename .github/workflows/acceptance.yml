@@ -76,7 +76,11 @@ jobs:
           cli_name="$(npm pack ./candidates/cli/packages/cli --pack-destination "$tarballs" --silent)"
 
           npm ci --prefix candidates/ministack-plugin
-          npm install --prefix candidates/ministack-plugin --no-save --package-lock=false --no-audit --no-fund "$tarballs/$sdk_name"
+          pushd candidates/ministack-plugin >/dev/null
+          npm pkg set "devDependencies.@getanbo/plugin-sdk=file:$tarballs/$sdk_name"
+          npm install --package-lock=false --no-audit --no-fund
+          npm pkg delete "devDependencies.@getanbo/plugin-sdk"
+          popd >/dev/null
           plugin_name="$(npm pack ./candidates/ministack-plugin --pack-destination "$tarballs" --silent)"
 
           {
