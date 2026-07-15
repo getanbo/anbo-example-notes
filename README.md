@@ -83,6 +83,24 @@ zero Terraform changes and cache hits for both the API image and Lambda
 artifact. Stop `logs --follow` with `SIGINT`; the CLI emits cancellation and
 terminal events before exiting with code 130.
 
+### Incremental Deploys
+
+With an Anbo CLI release that lists the `--reconcile` flag, ordinary
+`anbo deploy` is the incremental development path. It reuses unchanged build
+artifacts and can reuse recorded Terraform state and outputs when the
+Terraform inputs have not changed.
+
+Force Terraform to refresh and reconcile the declared infrastructure against
+MiniStack when you suspect drift or need to verify out-of-band changes:
+
+```bash
+anbo deploy --reconcile --output=jsonl
+```
+
+`--reconcile` is an explicit full infrastructure check, not the normal edit
+loop. Older CLI releases that do not list the flag always reconcile Terraform;
+do not pass `--reconcile` to those versions.
+
 The compatibility alias is also supported:
 
 ```bash
